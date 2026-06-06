@@ -19,7 +19,7 @@ def draft_plan(state: PlanningState) -> PlanningState:
 
 
 
-def build_planning_graph() -> StateGraph[PlanningState]:
+def create_planning_graph() -> StateGraph[PlanningState]:
     graph = StateGraph(PlanningState)
     graph.add_node("draft_plan", draft_plan)
     graph.add_edge(START, "draft_plan")
