@@ -8,7 +8,6 @@ class PlanningState(TypedDict):
     plan: str
 
 
-
 def draft_plan(state: PlanningState) -> PlanningState:
     """Seed a minimal planning response for future graph expansion."""
 
@@ -16,7 +15,6 @@ def draft_plan(state: PlanningState) -> PlanningState:
         "objective": state["objective"],
         "plan": f"Initial plan prepared for: {state['objective']}",
     }
-
 
 
 def create_planning_graph() -> StateGraph[PlanningState]:
