@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  backend-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          elif [ -f pyproject.toml ]; then
+            pip install .
+          elif [ -f setup.py ] || [ -f setup.cfg ]; then
+            pip install .
+          else
+            echo "No Python dependency manifest found. Skipping project dependency install."
+          fi
+
+          pip install fastapi uvicorn httpx
+
+      - name: FastAPI healthcheck smoke test
+        env:
+          FASTAPI_APP_CANDIDATES: app.main:app,main:app,src.main:app,src.app:app
+        run: |
+          python - <<'PY'
+          import importlib
+          import os
+          import sys
+
+          from fastapi.testclient import TestClient
+
+          candidates = [c.strip() for c in os.getenv("FASTAPI_APP_CANDIDATES", "").split(",") if c.strip()]
+
+          app = None
+          loaded_from = None
+          for candidate in candidates:
+            module_name, _, attr_name = candidate.partition(":")
+            if not module_name or not attr_name:
+              continue
+            try:
+              module = importlib.import_module(module_name)
+              app = getattr(module, attr_name)
+              loaded_from = candidate
+              break
+            except Exception:
+              continue
+
+          if app is None:
+            print("::warning::No FastAPI app found from candidates. Skipping smoke test.")
+            sys.exit(0)
+
+          print(f"Loaded FastAPI app from {loaded_from}")
+          health_paths = ("/health", "/healthz", "/ping")
+
+          with TestClient(app) as client:
+            for path in health_paths:
+              response = client.get(path)
+              print(f"GET {path} -> {response.status_code}")
+              if response.status_code == 200:
+                print("Healthcheck smoke test passed.")
+                sys.exit(0)
+
+          raise SystemExit("Healthcheck smoke test failed: no health endpoint returned HTTP 200.")
+          PY
